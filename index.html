@@ -74,7 +74,7 @@
                     <button onclick="clearCart()" class="w-full text-[9px] text-gray-600 mt-2 uppercase underline">Vider</button>
                 </div>
                 <div class="bg-black p-5 rounded border border-blue-900 shadow-2xl">
-                    <h3 class="text-xs text-blue-400 font-bold uppercase mb-4 tracking-widest border-b border-blue-900/30 pb-2">Trésorerie Club</h3>
+                    <h3 class="text-xs text-blue-400 font-bold uppercase mb-4 tracking-widest border-b border-blue-900/30 pb-2">Chiffre d'affaire du Repère</h3>
                     <div class="space-y-4">
                         <div class="flex justify-between items-end">
                             <div><p class="text-[9px] text-gray-500 uppercase font-bold">Hebdomadaire</p><p id="ca-weekly" class="text-3xl font-bold text-white leading-none">0$</p></div>
@@ -234,7 +234,6 @@
             if(!qty || qty <= 0) return;
             if(qty > p.stock) return alert("Pas assez de stock !");
 
-            // On ajoute l'objet avec sa quantité. Le prix stocké ici est le prix unitaire.
             cart.push({...p, cartQty: qty}); 
             render(); 
         }
@@ -246,19 +245,16 @@
             const seller = prompt("Nom du vendeur :");
             if(!seller || seller.trim() === "") return;
             
-            // Calcul avec quantité : unitaire * quantité
             const sub = cart.reduce((a, b) => a + (b.price * b.cartQty), 0); 
             const tx = document.getElementById('tax-toggle').checked ? Math.round(sub*(taxConfig.rate/100)) : 0; 
             const disc = document.getElementById('discount-toggle').checked ? Math.round(sub*(discountConfig.rate/100)) : 0; 
             const tot = sub + tx - disc; 
             
-            // Formatage du nom pour l'historique : "Nom (x2)"
             const itemsName = cart.map(i => i.cartQty > 1 ? `${i.name} (x${i.cartQty})` : i.name).join(', ');
             
             const entry = { date: new Date().toLocaleString('fr-FR'), rawDate: new Date().toISOString().split('T')[0], seller: seller.toUpperCase(), items: itemsName, total: tot };
             salesHistory.unshift(entry);
             
-            // Déduction du stock correcte
             cart.forEach(i => products.find(x=>x.id===i.id).stock -= i.cartQty); 
             money.weekly += tot; money.total += tot; cart = []; save(); render(); 
         }
@@ -291,7 +287,19 @@
 
             document.getElementById('ca-weekly').innerText = money.weekly + "$";
             document.getElementById('ca-total').innerText = money.total + "$";
-            document.getElementById('inventory-table').innerHTML = products.map(p => `<tr class="border-b border-gray-800 p-2"><td><img src="${p.img}" class="w-8 h-8 rounded object-cover"></td><td class="font-bold">${p.name}</td><td>${p.price}$</td><td class="text-center">${p.stock}</td><td class="text-right"><button onclick="editProductPrompt(${p.id})" class="text-blue-400 mr-2">Edit</button></td></tr>`).join('');
+            
+            // TABLEAU INVENTAIRE AVEC BOUTON DELETE
+            document.getElementById('inventory-table').innerHTML = products.map(p => `
+                <tr class="border-b border-gray-800 p-2">
+                    <td><img src="${p.img}" class="w-8 h-8 rounded object-cover"></td>
+                    <td class="font-bold">${p.name}</td>
+                    <td>${p.price}$</td>
+                    <td class="text-center">${p.stock}</td>
+                    <td class="text-right">
+                        <button onclick="editProductPrompt(${p.id})" class="text-blue-400 mr-2 uppercase font-bold text-[10px]">Edit</button>
+                        <button onclick="deleteProduct(${p.id})" class="text-red-600 font-bold text-[10px] uppercase hover:underline">X Supprimer</button>
+                    </td>
+                </tr>`).join('');
             
             document.getElementById('staff-list').innerHTML = staff.map(p => `<div class="bg-black p-3 border border-gray-800 rounded flex items-center justify-between"><div class="flex items-center gap-2"><img src="${p.img}" onclick="zoomImg('${p.img}')" class="w-8 h-8 rounded-full object-cover zoomable"><div><div class="text-[10px] font-bold neon-blue">${p.name}</div><div class="text-[8px] text-gray-500">${p.role}</div></div></div><div class="flex gap-2"><button onclick="editPerson('staff', ${p.id})" class="text-blue-400 text-[10px]">Edit</button><button onclick="deletePerson('staff', ${p.id})" class="text-red-900 font-bold">X</button></div></div>`).join('');
             
@@ -347,7 +355,31 @@
 
         function deletePerson(t,id) { if(confirm("Supprimer définitivement ?")) { if(t==='staff') staff=staff.filter(x=>x.id!==id); else club=club.filter(x=>x.id!==id); save(); render(); }}
         
-        function editProductPrompt(id=null) { const p = id ? products.find(x=>x.id===id) : {name:"",price:0,img:""}; const n = prompt("Nom :", p.name); if(!n) return; const pr = parseInt(prompt("Prix :", p.price))||0; const im = prompt("URL :", p.img); if(id) Object.assign(products.find(x=>x.id===id), {name:n, price:pr, img:im}); else products.push({id:Date.now(), name:n, price:pr, stock:0, img:im}); save(); render(); }
+        function editProductPrompt(id=null) { 
+            const p = id ? products.find(x=>x.id===id) : {name:"",price:0,img:""}; 
+            const n = prompt("Nom :", p.name); 
+            if(!n) return; 
+            const pr = parseInt(prompt("Prix :", p.price))||0; 
+            const im = prompt("URL Image :", p.img); 
+            if(id) {
+                Object.assign(products.find(x=>x.id===id), {name:n, price:pr, img:im});
+            } else {
+                products.push({id:Date.now(), name:n, price:pr, stock:0, img:im});
+            }
+            save(); 
+            render(); 
+        }
+
+        // FONCTION POUR SUPPRIMER UN PRODUIT
+        function deleteProduct(id) {
+            if(confirm("Supprimer ce produit de l'inventaire et de la carte ?")) {
+                products = products.filter(p => p.id !== id);
+                // On vide le panier au cas où le produit y était
+                cart = cart.filter(c => c.id !== id);
+                save();
+                render();
+            }
+        }
         
         function resetMoney(t) { if(confirm("Reset ?")) { money[t]=0; save(); render(); } }
         function clearHistory() { if(confirm("Vider l'historique ?")) { salesHistory = []; save(); render(); } }
@@ -372,4 +404,3 @@
     </script>
 </body>
 </html>
-
